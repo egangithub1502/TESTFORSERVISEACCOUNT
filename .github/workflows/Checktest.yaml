@@ -65,7 +65,6 @@ jobs:
           GOOGLE_CLOUD_KEY: ${{ secrets.GOOGLE_CLOUD_KEY }}  # Base64-encoded service account key
           DEPLOY_PATH: "/home/jeganraja005/www_profitokrs_com_6_4_1"
           BACKUP_PATH: "/home/jeganraja005/profit-site-en-backup"
-          DATE: $(date +'%Y%m%d_%H%M%S')
 
         run: |
           # Decode Google Cloud key
@@ -83,7 +82,8 @@ jobs:
             echo "Checking if $file exists in the deploy path..."
             if gcloud compute ssh "${{ secrets.GCP_VM_USERNAME }}@${{ secrets.GCP_VM_INSTANCE_NAME }}" --zone=${{ secrets.GCP_VM_ZONE }} --project=$GOOGLE_CLOUD_PROJECT -- "test -f '$DEPLOY_PATH/$file'"; then
                 echo "$file exists in the deploy path, backing it up."
-                gcloud compute ssh "${{ secrets.GCP_VM_USERNAME }}@${{ secrets.GCP_VM_INSTANCE_NAME }}" --zone=${{ secrets.GCP_VM_ZONE }} --project=$GOOGLE_CLOUD_PROJECT -- "mkdir -p '$BACKUP_PATH' && cp '$DEPLOY_PATH/$file' '$BACKUP_PATH/$file-$DATE'"
+                backup_date=$(gcloud compute ssh "${{ secrets.GCP_VM_USERNAME }}@${{ secrets.GCP_VM_INSTANCE_NAME }}" --zone=${{ secrets.GCP_VM_ZONE }} --project=$GOOGLE_CLOUD_PROJECT -- "date +'%Y%m%d_%H%M%S'")
+                gcloud compute ssh "${{ secrets.GCP_VM_USERNAME }}@${{ secrets.GCP_VM_INSTANCE_NAME }}" --zone=${{ secrets.GCP_VM_ZONE }} --project=$GOOGLE_CLOUD_PROJECT -- "mkdir -p '$BACKUP_PATH' && cp '$DEPLOY_PATH/$file' '$BACKUP_PATH/$file-$backup_date'"
             else
                 echo "$file does not exist in the deploy path, skipping backup."
             fi
