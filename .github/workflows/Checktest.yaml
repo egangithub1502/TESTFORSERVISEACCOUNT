@@ -63,8 +63,8 @@ jobs:
         env:
           GOOGLE_CLOUD_PROJECT: ${{ secrets.GOOGLE_CLOUD_PROJECT }}
           GOOGLE_CLOUD_KEY: ${{ secrets.GOOGLE_CLOUD_KEY }}  # Base64-encoded service account key
-          DEPLOY_PATH: "/home/Jegan/www_profitokrs_com_6_4_1"
-          BACKUP_PATH: "/home/Jegan/profit-site-en-backup"
+          DEPLOY_PATH: "/home/jeganraja005/www_profitokrs_com_6_4_1"
+          BACKUP_PATH: "/home/jeganraja005/profit-site-en-backup"
           DATE: $(date +'%Y%m%d_%H%M%S')
 
         run: |
