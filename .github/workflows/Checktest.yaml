@@ -72,16 +72,21 @@ jobs:
           echo "$GOOGLE_CLOUD_KEY" | base64 --decode > service-account.json
           gcloud auth activate-service-account --key-file=service-account.json
           gcloud config set project $GOOGLE_CLOUD_PROJECT
-
           changed_files="${{ needs.list-files.outputs.changed_files }}"
           if [ -z "$changed_files" ]; then
             echo "No files to deploy."
             exit 0
           fi
           files=($changed_files)
-
           for file in "${files[@]}"; do
             echo "Processing file: $file"
+            dir_path=$(dirname "$file")  # Get the directory path of the file
+            # Check if the directory exists in the deploy path
+            if ! gcloud compute ssh "${{ secrets.GCP_VM_USERNAME }}@${{ secrets.GCP_VM_INSTANCE_NAME }}" --zone=${{ secrets.GCP_VM_ZONE }} --project=$GOOGLE_CLOUD_PROJECT -- "sudo test -d '$DEPLOY_PATH/$dir_path'"; then
+              echo "Directory $dir_path does not exist in deploy path, creating it."
+              gcloud compute ssh "${{ secrets.GCP_VM_USERNAME }}@${{ secrets.GCP_VM_INSTANCE_NAME }}" --zone=${{ secrets.GCP_VM_ZONE }} --project=$GOOGLE_CLOUD_PROJECT -- "sudo mkdir -p '$DEPLOY_PATH/$dir_path'"
+            fi
+            
             # Check if the file exists in the deploy path
             if gcloud compute ssh "${{ secrets.GCP_VM_USERNAME }}@${{ secrets.GCP_VM_INSTANCE_NAME }}" --zone=${{ secrets.GCP_VM_ZONE }} --project=$GOOGLE_CLOUD_PROJECT -- "sudo test -f '$DEPLOY_PATH/$file'"; then
               echo "$file exists, creating backup."
@@ -92,7 +97,6 @@ jobs:
               # Take backup of the existing file
               gcloud compute ssh "${{ secrets.GCP_VM_USERNAME }}@${{ secrets.GCP_VM_INSTANCE_NAME }}" --zone=${{ secrets.GCP_VM_ZONE }} --project=$GOOGLE_CLOUD_PROJECT -- "sudo cp -r '$DEPLOY_PATH/$file' '$BACKUP_PATH/${file}-bak-$backup_date'"
               echo "Backup of $file created successfully."
-
               # Copy the changed file from Git path to VM
               gcloud compute scp "$file" "${{ secrets.GCP_VM_USERNAME }}@${{ secrets.GCP_VM_INSTANCE_NAME }}:$GIT_PATH/$file" --zone=${{ secrets.GCP_VM_ZONE }} --project=$GOOGLE_CLOUD_PROJECT
               echo "Copied $file to VM at $GIT_PATH."
@@ -100,7 +104,6 @@ jobs:
               # Move file from Git path to deploy path
               gcloud compute ssh "${{ secrets.GCP_VM_USERNAME }}@${{ secrets.GCP_VM_INSTANCE_NAME }}" --zone=${{ secrets.GCP_VM_ZONE }} --project=$GOOGLE_CLOUD_PROJECT -- "sudo cp -r '$GIT_PATH/$file' '$DEPLOY_PATH/$file'"
               echo "Moved $file to deploy path."
-
               # Set permissions and ownership
               gcloud compute ssh "${{ secrets.GCP_VM_USERNAME }}@${{ secrets.GCP_VM_INSTANCE_NAME }}" --zone=${{ secrets.GCP_VM_ZONE }} --project=$GOOGLE_CLOUD_PROJECT -- "sudo chown -R www-data: '$DEPLOY_PATH/$file' && sudo chmod 640 '$DEPLOY_PATH/$file'"
               echo "$file deployed successfully with updated permissions."
@@ -110,11 +113,9 @@ jobs:
               # Copy the new file from Git path to VM
               gcloud compute scp "$file" "${{ secrets.GCP_VM_USERNAME }}@${{ secrets.GCP_VM_INSTANCE_NAME }}:$GIT_PATH/$file" --zone=${{ secrets.GCP_VM_ZONE }} --project=$GOOGLE_CLOUD_PROJECT
               echo "Copied $file to VM at $GIT_PATH."
-
               # Move file from Git path to deploy path
               gcloud compute ssh "${{ secrets.GCP_VM_USERNAME }}@${{ secrets.GCP_VM_INSTANCE_NAME }}" --zone=${{ secrets.GCP_VM_ZONE }} --project=$GOOGLE_CLOUD_PROJECT -- "sudo cp -r '$GIT_PATH/$file' '$DEPLOY_PATH/$file'"
               echo "Moved $file to deploy path."
-
               # Set permissions and ownership
               gcloud compute ssh "${{ secrets.GCP_VM_USERNAME }}@${{ secrets.GCP_VM_INSTANCE_NAME }}" --zone=${{ secrets.GCP_VM_ZONE }} --project=$GOOGLE_CLOUD_PROJECT -- "sudo chown -R www-data: '$DEPLOY_PATH/$file' && sudo chmod 640 '$DEPLOY_PATH/$file'"
               echo "$file deployed successfully with updated permissions."
