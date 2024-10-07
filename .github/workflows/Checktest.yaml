@@ -64,8 +64,8 @@ jobs:
           GOOGLE_CLOUD_PROJECT: ${{ secrets.GOOGLE_CLOUD_PROJECT }}
           GOOGLE_CLOUD_KEY: ${{ secrets.GOOGLE_CLOUD_KEY }}  # Base64-encoded service account key
           DEPLOY_PATH: "/var/www/www_profitokrs_com_6_4_1"
-          BACKUP_PATH: "/home/jeganraja005/profit-site-en-backup"
-          GIT_PATH: "/home/jeganraja005/git-rsync-en"  # Updated GIT_PATH
+          BACKUP_PATH: "/home/Jegan/profit-site-en-backup"
+          GIT_PATH: "/home/Jegan/git-rsync-en"  # Updated GIT_PATH
 
         run: |
           # Decode Google Cloud key
