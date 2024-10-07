@@ -57,6 +57,7 @@ jobs:
             echo "No changed files found, skipping deployment."
             exit 0
           fi
+
       - name: Deploy Changed Files to Specific VM
         if: success() && needs.list-files.outputs.changed_files != ''
         env:
@@ -69,8 +70,8 @@ jobs:
           # Decode Google Cloud key
           echo "$GOOGLE_CLOUD_KEY" | base64 --decode > service-account.json
           gcloud auth activate-service-account --key-file=service-account.json
-          gcloud config set project $GOOGLE_CLOUD_PROJECT
-          
+          gcloud config set project "$GOOGLE_CLOUD_PROJECT"
+
           changed_files="${{ needs.list-files.outputs.changed_files }}"
           if [ -z "$changed_files" ]; then
             echo "No files to deploy."
@@ -80,33 +81,31 @@ jobs:
           files=($changed_files)
           for file in "${files[@]}"; do
             echo "Checking if $file exists in the deploy path..."
-            if gcloud compute ssh "${{ secrets.GCP_VM_USERNAME }}@${{ secrets.GCP_VM_INSTANCE_NAME }}" --zone=${{ secrets.GCP_VM_ZONE }} --project=$GOOGLE_CLOUD_PROJECT -- "test -f '$DEPLOY_PATH/$file'"; then
+            if gcloud compute ssh "${{ secrets.GCP_VM_USERNAME }}@${{ secrets.GCP_VM_INSTANCE_NAME }}" --zone="${{ secrets.GCP_VM_ZONE }}" --project="$GOOGLE_CLOUD_PROJECT" -- "test -f '$DEPLOY_PATH/$file'"; then
               echo "$file exists in the deploy path, backing it up."
-              backup_date=$(gcloud compute ssh "${{ secrets.GCP_VM_USERNAME }}@${{ secrets.GCP_VM_INSTANCE_NAME }}" --zone=${{ secrets.GCP_VM_ZONE }} --project=$GOOGLE_CLOUD_PROJECT -- "date +'%Y%m%d_%H%M%S'")
-              gcloud compute ssh "${{ secrets.GCP_VM_USERNAME }}@${{ secrets.GCP_VM_INSTANCE_NAME }}" --zone=${{ secrets.GCP_VM_ZONE }} --project=$GOOGLE_CLOUD_PROJECT -- "sudo mkdir -p '$BACKUP_PATH' && sudo cp -r '$DEPLOY_PATH/$file' '$BACKUP_PATH/${file}-bak-$backup_date'"
+              backup_date=$(gcloud compute ssh "${{ secrets.GCP_VM_USERNAME }}@${{ secrets.GCP_VM_INSTANCE_NAME }}" --zone="${{ secrets.GCP_VM_ZONE }}" --project="$GOOGLE_CLOUD_PROJECT" -- "date +'%Y%m%d_%H%M%S'")
+              gcloud compute ssh "${{ secrets.GCP_VM_USERNAME }}@${{ secrets.GCP_VM_INSTANCE_NAME }}" --zone="${{ secrets.GCP_VM_ZONE }}" --project="$GOOGLE_CLOUD_PROJECT" -- "sudo mkdir -p '$BACKUP_PATH' && sudo cp -r '$DEPLOY_PATH/$file' '$BACKUP_PATH/${file}-bak-$backup_date'"
             else
               echo "$file does not exist in the deploy path, skipping backup."
             fi
 
             # Upload file to GIT_PATH
             echo "Deploying $file to $GIT_PATH on VM"
-            gcloud compute scp "$file" "${{ secrets.GCP_VM_USERNAME }}@${{ secrets.GCP_VM_INSTANCE_NAME }}:$GIT_PATH/$file" --zone=${{ secrets.GCP_VM_ZONE }} --project=$GOOGLE_CLOUD_PROJECT
+            gcloud compute scp "$file" "${{ secrets.GCP_VM_USERNAME }}@${{ secrets.GCP_VM_INSTANCE_NAME }}:$GIT_PATH/$file" --zone="${{ secrets.GCP_VM_ZONE }}" --project="$GOOGLE_CLOUD_PROJECT"
 
             # Deploying files with backup logic
             echo "Deploying $file to $DEPLOY_PATH"
-            gcloud compute ssh "${{ secrets.GCP_VM_USERNAME }}@${{ secrets.GCP_VM_INSTANCE_NAME }}" --zone=${{ secrets.GCP_VM_ZONE }} --project=$GOOGLE_CLOUD_PROJECT "
-              for file in '${file}'; do
-                if [ -f '$DEPLOY_PATH/\$file' ]; then
-                  echo 'Backing up \$file'
-                  sudo cp -r '$DEPLOY_PATH/\$file' '$DEPLOY_PATH/\$file-bak-\$(date +%Y%m%d_%H%M%S)'
-                  sudo mv '$DEPLOY_PATH/\$file-bak-\$(date +%Y%m%d_%H%M%S)' '$BACKUP_PATH/'
-                else
-                  echo '\$file is a new file. Going to create.'
-                fi
-                sudo cp -r '$GIT_PATH/\$file' '$DEPLOY_PATH/\$file'
-                sudo chown -R www-data: '$DEPLOY_PATH/\$file'
-                sudo chmod 640 '$DEPLOY_PATH/\$file'
-                echo '\$file deployed successfully'
-              done
+            gcloud compute ssh "${{ secrets.GCP_VM_USERNAME }}@${{ secrets.GCP_VM_INSTANCE_NAME }}" --zone="${{ secrets.GCP_VM_ZONE }}" --project="$GOOGLE_CLOUD_PROJECT" -- "
+              if [ -f '$DEPLOY_PATH/$file' ]; then
+                echo 'Backing up $file'
+                sudo cp -r '$DEPLOY_PATH/$file' '$DEPLOY_PATH/$file-bak-\$(date +%Y%m%d_%H%M%S)'
+                sudo mv '$DEPLOY_PATH/$file-bak-\$(date +%Y%m%d_%H%M%S)' '$BACKUP_PATH/'
+              else
+                echo '$file is a new file. Creating it.'
+              fi
+              sudo cp -r '$GIT_PATH/$file' '$DEPLOY_PATH/$file'
+              sudo chown -R www-data: '$DEPLOY_PATH/$file'
+              sudo chmod 640 '$DEPLOY_PATH/$file'
+              echo '$file deployed successfully'
             "
           done
