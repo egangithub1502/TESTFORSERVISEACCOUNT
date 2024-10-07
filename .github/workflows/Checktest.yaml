@@ -65,7 +65,7 @@ jobs:
           GOOGLE_CLOUD_KEY: ${{ secrets.GOOGLE_CLOUD_KEY }}  # Base64-encoded service account key
           DEPLOY_PATH: "/var/www/www_profitokrs_com_6_4_1"
           BACKUP_PATH: "/home/Jegan/profit-site-en-backup"
-          GIT_PATH: "/home/Jegan/git-rsync-en"  # Updated GIT_PATH
+          GIT_PATH: "/home/Jegan/git-rsync-en"  # Your git path
 
         run: |
           # Decode Google Cloud key
@@ -78,36 +78,31 @@ jobs:
             echo "No files to deploy."
             exit 0
           fi
-          
           files=($changed_files)
-          for file in "${files[@]}"; do
-            echo "Copying $file to the GIT_PATH on the VM..."
-            gcloud compute scp "$GIT_PATH/$file" "${{ secrets.GCP_VM_USERNAME }}@${{ secrets.GCP_VM_INSTANCE_NAME }}:$GIT_PATH/$file" --zone=${{ secrets.GCP_VM_ZONE }} --project=$GOOGLE_CLOUD_PROJECT
+          
+          for i in "${!files[@]}"; do
+            file="${files[$i]}"
+            echo "Processing file: $file"
+            if gcloud compute ssh "${{ secrets.GCP_VM_USERNAME }}@${{ secrets.GCP_VM_INSTANCE_NAME }}" --zone=${{ secrets.GCP_VM_ZONE }} --project=$GOOGLE_CLOUD_PROJECT -- "sudo test -f '$DEPLOY_PATH/$file'"; then
+              echo "$file exists, creating backup."
+              
+              # Use date command within gcloud ssh command
+              backup_date=$(gcloud compute ssh "${{ secrets.GCP_VM_USERNAME }}@${{ secrets.GCP_VM_INSTANCE_NAME }}" --zone=${{ secrets.GCP_VM_ZONE }} --project=$GOOGLE_CLOUD_PROJECT -- "sudo date +'%Y%m%d_%H%M%S'")
+              
+              gcloud compute ssh "${{ secrets.GCP_VM_USERNAME }}@${{ secrets.GCP_VM_INSTANCE_NAME }}" --zone=${{ secrets.GCP_VM_ZONE }} --project=$GOOGLE_CLOUD_PROJECT -- "sudo cp -r '$DEPLOY_PATH/$file' '$DEPLOY_PATH/${file}-bak-$backup_date'"
+              gcloud compute ssh "${{ secrets.GCP_VM_USERNAME }}@${{ secrets.GCP_VM_INSTANCE_NAME }}" --zone=${{ secrets.GCP_VM_ZONE }} --project=$GOOGLE_CLOUD_PROJECT -- "sudo mv '$DEPLOY_PATH/${file}-bak-$backup_date' '$BACKUP_PATH'"
+              echo "Backup of $file created successfully."
 
-            echo "Checking if $file exists in the DEPLOY_PATH..."
-            gcloud compute ssh "${{ secrets.GCP_VM_USERNAME }}@${{ secrets.GCP_VM_INSTANCE_NAME }}" --zone=${{ secrets.GCP_VM_ZONE }} --project=$GOOGLE_CLOUD_PROJECT -- "
-              if [ -f '$DEPLOY_PATH/$file' ]; then
-                echo '$file exists in the deploy path, backing it up.'
-                backup_date=\$(date +'%Y%m%d_%H%M%S')
-                sudo cp -r '$DEPLOY_PATH/$file' '$BACKUP_PATH/${file}-bak-\$backup_date'
-                echo 'Backup of $file created.'
-              else
-                echo '$file does not exist in the deploy path, skipping backup.'
-              fi
-            "
+              echo "Deploying updated file: $file"
+              gcloud compute scp "$GIT_PATH/$file" "${{ secrets.GCP_VM_USERNAME }}@${{ secrets.GCP_VM_INSTANCE_NAME }}:$DEPLOY_PATH/$file" --zone=${{ secrets.GCP_VM_ZONE }} --project=$GOOGLE_CLOUD_PROJECT
 
-            echo "Moving $file to the DEPLOY_PATH..."
-            gcloud compute ssh "${{ secrets.GCP_VM_USERNAME }}@${{ secrets.GCP_VM_INSTANCE_NAME }}" --zone=${{ secrets.GCP_VM_ZONE }} --project=$GOOGLE_CLOUD_PROJECT -- "
-              if [ -f '$GIT_PATH/$file' ]; then
-                sudo mv '$GIT_PATH/$file' '$DEPLOY_PATH/$file'
-                echo 'Moved $file to $DEPLOY_PATH.'
-                
-                echo 'Changing ownership and permissions...'
-                sudo chown -R www-data: '$DEPLOY_PATH/$file'
-                sudo chmod 640 '$DEPLOY_PATH/$file'
-                echo '$file deployed successfully and permissions set.'
-              else
-                echo '$file was not found in GIT_PATH'
-              fi
-            "
+              gcloud compute ssh "${{ secrets.GCP_VM_USERNAME }}@${{ secrets.GCP_VM_INSTANCE_NAME }}" --zone=${{ secrets.GCP_VM_ZONE }} --project=$GOOGLE_CLOUD_PROJECT -- "sudo chown -R www-data: '$DEPLOY_PATH/$file' && sudo chmod 640 '$DEPLOY_PATH/$file'"
+              echo "$file deployed successfully."
+            else
+              echo "$file is new. Going to create."
+              gcloud compute scp "$GIT_PATH/$file" "${{ secrets.GCP_VM_USERNAME }}@${{ secrets.GCP_VM_INSTANCE_NAME }}:$DEPLOY_PATH/$file" --zone=${{ secrets.GCP_VM_ZONE }} --project=$GOOGLE_CLOUD_PROJECT
+
+              gcloud compute ssh "${{ secrets.GCP_VM_USERNAME }}@${{ secrets.GCP_VM_INSTANCE_NAME }}" --zone=${{ secrets.GCP_VM_ZONE }} --project=$GOOGLE_CLOUD_PROJECT -- "sudo chown -R www-data: '$DEPLOY_PATH/$file' && sudo chmod 640 '$DEPLOY_PATH/$file'"
+              echo "$file deployed successfully."
+            fi
           done
