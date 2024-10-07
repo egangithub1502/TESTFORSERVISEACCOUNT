@@ -56,15 +56,14 @@ jobs:
           else
             echo "No changed files found, skipping deployment."
             exit 0
-          fi
 
       - name: Deploy Changed Files to Specific VM
         if: success() && needs.list-files.outputs.changed_files != ''
         env:
           GOOGLE_CLOUD_PROJECT: ${{ secrets.GOOGLE_CLOUD_PROJECT }}
           GOOGLE_CLOUD_KEY: ${{ secrets.GOOGLE_CLOUD_KEY }}  # Base64-encoded service account key
-          DEPLOY_PATH: "/home/jeganraja005/www_profitokrs_com_6_4_1"
-          BACKUP_PATH: "/home/jeganraja005/profit-site-en-backup"
+          DEPLOY_PATH: "/var/www/www_profitokrs_com_6_4_1"
+          BACKUP_PATH: "/home/Jegan/profit-site-en-backup"
 
         run: |
           # Decode Google Cloud key
@@ -87,7 +86,11 @@ jobs:
             else
                 echo "$file does not exist in the deploy path, skipping backup."
             fi
-            
+
             echo "Deploying $file to your specific VM"
             gcloud compute scp "$file" "${{ secrets.GCP_VM_USERNAME }}@${{ secrets.GCP_VM_INSTANCE_NAME }}:$DEPLOY_PATH/$file" --zone=${{ secrets.GCP_VM_ZONE }} --project=$GOOGLE_CLOUD_PROJECT
+
+            # Change ownership and permissions
+            echo "Changing ownership and permissions for $file"
+            gcloud compute ssh "${{ secrets.GCP_VM_USERNAME }}@${{ secrets.GCP_VM_INSTANCE_NAME }}" --zone=${{ secrets.GCP_VM_ZONE }} --project=$GOOGLE_CLOUD_PROJECT -- "sudo chown -R www-data: $DEPLOY_PATH/$file && sudo chmod 640 $DEPLOY_PATH/$file"
           done
