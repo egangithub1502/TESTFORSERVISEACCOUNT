@@ -94,7 +94,7 @@ jobs:
 
             # Deploying files with backup logic
             echo "Deploying $file to $DEPLOY_PATH"
-            gcloud compute ssh "${{ secrets.GCP_VM_USERNAME }}@${{ secrets.GCP_VM_INSTANCE_NAME }}" --zone=${{ secrets.GCP_VM_ZONE }} --project=$GOOGLE_CLOUD_PROJECT -- bash -c "
+            gcloud compute ssh "${{ secrets.GCP_VM_USERNAME }}@${{ secrets.GCP_VM_INSTANCE_NAME }}" --zone=${{ secrets.GCP_VM_ZONE }} --project=$GOOGLE_CLOUD_PROJECT "
               for file in '${file}'; do
                 if [ -f '$DEPLOY_PATH/\$file' ]; then
                   echo 'Backing up \$file'
