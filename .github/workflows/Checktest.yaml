@@ -78,7 +78,7 @@ jobs:
             echo "Processing file: $file"
             dir_path=$(dirname "$file")
             # Create directories in the deploy path, git path, and backup path
-            gcloud compute ssh "${{ secrets.GCP_VM_USERNAME }}@${{ secrets.GCP_VM_INSTANCE_NAME }}" --zone=${{ secrets.GCP_VM_ZONE }} --project=$GOOGLE_CLOUD_PROJECT -- "mkdir -p '$DEPLOY_PATH/$dir_path' '$GIT_PATH/$dir_path' '$BACKUP_PATH/$dir_path'"
+            gcloud compute ssh "${{ secrets.GCP_VM_USERNAME }}@${{ secrets.GCP_VM_INSTANCE_NAME }}" --zone=${{ secrets.GCP_VM_ZONE }} --project=$GOOGLE_CLOUD_PROJECT -- "sudo mkdir -p '$DEPLOY_PATH/$dir_path' '$GIT_PATH/$dir_path' '$BACKUP_PATH/$dir_path'"
             gcloud compute ssh "${{ secrets.GCP_VM_USERNAME }}@${{ secrets.GCP_VM_INSTANCE_NAME }}" --zone=${{ secrets.GCP_VM_ZONE }} --project=$GOOGLE_CLOUD_PROJECT -- "sudo chown -R www-data: '$DEPLOY_PATH/$file' && sudo chown -R Jegan: '$GIT_PATH/$dir_path' && sudo chown -R Jegan: '$BACKUP_PATH/$dir_path'"
             # Check if the file exists in the deploy path
             if gcloud compute ssh "${{ secrets.GCP_VM_USERNAME }}@${{ secrets.GCP_VM_INSTANCE_NAME }}" --zone=${{ secrets.GCP_VM_ZONE }} --project=$GOOGLE_CLOUD_PROJECT -- "sudo test -f '$DEPLOY_PATH/$file'"; then
