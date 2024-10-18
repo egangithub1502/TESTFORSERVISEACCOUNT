@@ -37,9 +37,9 @@ jobs:
       - name: Send notification to Google Chat - Files Found
         if: success() && steps.check.outputs.changed_files != ''
         run: |
-          curl -X POST ${{ secrets.GOOGLE_CHAT_WEBHOOK_URL }} \
+          curl -X POST "${{ secrets.GOOGLE_CHAT_WEBHOOK_URL }}" \
           -H 'Content-Type: application/json' \
-          -d '{"text": "PR #${{ github.event.pull_request.number }}: Changed files detected: ${{ steps.check.outputs.changed_files }}"}'
+          -d "$(jq -n --arg text "PR #${{ github.event.pull_request.number }}: Changed files detected: ${{ steps.check.outputs.changed_files }}" '{text: $text}')"
 
   deploy:
     runs-on: ubuntu-latest
@@ -65,9 +65,9 @@ jobs:
           fi
       - name: Send notification to Google Chat - Deployment Starting
         run: |
-          curl -X POST ${{ secrets.GOOGLE_CHAT_WEBHOOK_URL }} \
+          curl -X POST "${{ secrets.GOOGLE_CHAT_WEBHOOK_URL }}" \
           -H 'Content-Type: application/json' \
-          -d '{"text": "Deployment starting for PR #${{ github.event.pull_request.number }}. Changed files: ${{ needs.list-files.outputs.changed_files }}"}'
+          -d "$(jq -n --arg text "Deployment starting for PR #${{ github.event.pull_request.number }}. Changed files: ${{ needs.list-files.outputs.changed_files }}" '{text: $text}')"
 
       - name: Deploy Changed Files to Specific VM
         if: success() && needs.list-files.outputs.changed_files != ''
@@ -115,6 +115,6 @@ jobs:
 
       - name: Send notification to Google Chat - Deployment Success
         run: |
-          curl -X POST ${{ secrets.GOOGLE_CHAT_WEBHOOK_URL }} \
+          curl -X POST "${{ secrets.GOOGLE_CHAT_WEBHOOK_URL }}" \
           -H 'Content-Type: application/json' \
-          -d '{"text": "Deployment successful for PR #${{ github.event.pull_request.number }}. Files: ${{ needs.list-files.outputs.changed_files }}"}'
+          -d "$(jq -n --arg text "Deployment successful for PR #${{ github.event.pull_request.number }}. Files: ${{ needs.list-files.outputs.changed_files }}" '{text: $text}')"
