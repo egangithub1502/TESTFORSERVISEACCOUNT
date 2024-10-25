@@ -77,7 +77,7 @@ jobs:
               echo "VM_USER=${{ secrets.GCP_VM_USERNAME }}" >> $GITHUB_ENV
               echo "VM_INSTANCE=${{ secrets.GCP_VM_INSTANCE_NAME }}" >> $GITHUB_ENV
               echo "VM_ZONE=${{ secrets.GCP_VM_ZONE }}" >> $GITHUB_ENV
-              printf "GOOGLE_CLOUD_KEY=%s\n" "${{ secrets.GOOGLE_CLOUD_KEY_DEV }}" >> $GITHUB_ENV
+              echo "GOOGLE_CLOUD_KEY=$(echo "${{ secrets.GOOGLE_CLOUD_KEY_DEV }}" | base64 -d)" >> $GITHUB_ENV
               echo "GOOGLE_CLOUD_PROJECT=${{ secrets.GOOGLE_CLOUD_PROJECT_DEV }}" >> $GITHUB_ENV
               ;;
             "refs/heads/master")
@@ -87,7 +87,7 @@ jobs:
               echo "VM_USER=${{ secrets.MASTER_VM_USERNAME }}" >> $GITHUB_ENV
               echo "VM_INSTANCE=${{ secrets.MASTER_VM_INSTANCE_NAME }}" >> $GITHUB_ENV
               echo "VM_ZONE=${{ secrets.MASTER_VM_ZONE }}" >> $GITHUB_ENV
-              printf "GOOGLE_CLOUD_KEY=%s\n" "${{ secrets.GOOGLE_CLOUD_KEY_MASTER }}" >> $GITHUB_ENV
+              echo "GOOGLE_CLOUD_KEY=$(echo "${{ secrets.GOOGLE_CLOUD_KEY_MASTER }}" | base64 -d)" >> $GITHUB_ENV
               echo "GOOGLE_CLOUD_PROJECT=${{ secrets.GOOGLE_CLOUD_PROJECT_MASTER }}" >> $GITHUB_ENV
               ;;
             *)
