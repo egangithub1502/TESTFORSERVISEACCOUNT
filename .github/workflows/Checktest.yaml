@@ -98,8 +98,8 @@ jobs:
       - name: Deploy Changed Files to Specific VM
         if: success() && needs.list-files.outputs.changed_files != ''
         env:
-          GOOGLE_CLOUD_PROJECT: ${{ secrets.GOOGLE_CLOUD_PROJECT }}
-          GOOGLE_CLOUD_KEY: ${{ secrets.GOOGLE_CLOUD_KEY }}  # Base64-encoded service account key
+          GOOGLE_CLOUD_PROJECT: ${{ env.GOOGLE_CLOUD_PROJECT }}
+          GOOGLE_CLOUD_KEY: ${{ env.GOOGLE_CLOUD_KEY }}  # Base64-encoded service account key
           DEPLOY_PATH: ${{ env.DEPLOY_PATH }}
           BACKUP_PATH: ${{ env.BACKUP_PATH }}
           GIT_PATH: ${{ env.GIT_PATH }}
