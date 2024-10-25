@@ -25,7 +25,7 @@ jobs:
       - name: Get PR number and check changed files
         id: check
         env:
-          GH_TOKEN: ${{ secrets.JEGANMERGE }}
+          GH_TOKEN: ${{ secrets.SIVAMERGE }}
         run: |
           pr_number=${{ github.event.pull_request.number }}
           echo "PR Number: $pr_number"
@@ -61,10 +61,10 @@ jobs:
         run: |
           if [ -s changed_files.txt ]; then
             echo "Changed files detected, proceeding with deployment."
-          else
+          else:
             echo "No changed files found, skipping deployment."
             exit 0
-          fi
+
       - name: Send notification to Google Chat - Deployment Starting
         run: |
           curl -X POST "${{ secrets.GOOGLE_CHAT_WEBHOOK_URL }}" \
@@ -82,6 +82,8 @@ jobs:
               echo "VM_USER=${{ secrets.GCP_VM_USERNAME }}" >> $GITHUB_ENV
               echo "VM_INSTANCE=${{ secrets.GCP_VM_INSTANCE_NAME }}" >> $GITHUB_ENV
               echo "VM_ZONE=${{ secrets.GCP_VM_ZONE }}" >> $GITHUB_ENV
+              echo "GOOGLE_CLOUD_KEY=${{ secrets.GOOGLE_CLOUD_KEY_DEV }}" >> $GITHUB_ENV
+              echo "GOOGLE_CLOUD_PROJECT=${{ secrets.GOOGLE_CLOUD_PROJECT_DEV }}" >> $GITHUB_ENV
               ;;
             "refs/heads/master")
               echo "DEPLOY_PATH=/var/www/master_server_path" >> $GITHUB_ENV
@@ -89,7 +91,9 @@ jobs:
               echo "GIT_PATH=/home/Jegan/master_git_path" >> $GITHUB_ENV
               echo "VM_USER=${{ secrets.MASTER_VM_USERNAME }}" >> $GITHUB_ENV
               echo "VM_INSTANCE=${{ secrets.MASTER_VM_INSTANCE_NAME }}" >> $GITHUB_ENV
-              echo "VM_ZONE=${{ secrets.GCP_VM_ZONE }}" >> $GITHUB_ENV
+              echo "VM_ZONE=${{ secrets.MASTER_VM_ZONE }}" >> $GITHUB_ENV
+              echo "GOOGLE_CLOUD_KEY=${{ secrets.GOOGLE_CLOUD_KEY_MASTER }}" >> $GITHUB_ENV
+              echo "GOOGLE_CLOUD_PROJECT=${{ secrets.GOOGLE_CLOUD_PROJECT_MASTER }}" >> $GITHUB_ENV
               ;;
             *)
               echo "No deployment for this branch"
@@ -118,6 +122,7 @@ jobs:
             echo "No files to deploy."
             exit 0
           fi
+
           files=($changed_files)
           for file in "${files[@]}"; do
             echo "Processing file: $file"
