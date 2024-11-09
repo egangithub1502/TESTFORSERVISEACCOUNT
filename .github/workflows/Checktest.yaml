@@ -39,7 +39,7 @@ jobs:
             echo "approved=false" >> $GITHUB_OUTPUT  # Set output value to false
             exit 1
           fi
-
+          
   list-files:
     needs: check-issue
     if: ${{ needs.check-issue.outputs.approved == 'true' && (github.head_ref == 'develop' || github.head_ref == 'master') }}
@@ -66,15 +66,15 @@ jobs:
           echo "Changed files from gh command: $changed_files"
           changed_files_single_line=$(echo "$changed_files" | tr '\n' ' ')
           echo "changed_files=$changed_files_single_line" >> $GITHUB_ENV
-          echo "::set-output name=changed_files::$changed_files_single_line"
-          
+          echo "changed_files=$changed_files_single_line" >> $GITHUB_OUTPUT
+
       - name: Send notification to Google Chat - Files Found
         if: success() && steps.check.outputs.changed_files != ''
         run: |
           curl -X POST "${{ secrets.GOOGLE_CHAT_WEBHOOK_URL }}" \
           -H 'Content-Type: application/json' \
           -d "$(jq -n --arg text "PR #${{ github.event.pull_request.number }}: Changed files detected: ${{ steps.check.outputs.changed_files }}" '{text: $text}')"
-          
+
   deploy:
     needs: [check-issue, list-files]
     if: ${{ needs.check-issue.outputs.approved == 'true' && needs.list-files.outputs.changed_files != '' }}  # Only run if approved and files are detected
@@ -83,6 +83,11 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v2
+
+      - name: Debug Outputs
+        run: |
+          echo "Approved: ${{ needs.check-issue.outputs.approved }}"
+          echo "Changed files: ${{ needs.list-files.outputs.changed_files }}"
 
       - name: Get changed files from previous step
         id: get_changed_files
@@ -105,7 +110,7 @@ jobs:
           curl -X POST "${{ secrets.GOOGLE_CHAT_WEBHOOK_URL }}" \
           -H 'Content-Type: application/json' \
           -d "$(jq -n --arg text "Deployment starting for PR #${{ github.event.pull_request.number }}. Changed files: ${{ needs.list-files.outputs.changed_files }}" '{text: $text}')"
-          
+
       - name: Set environment variables based on branch
         run: |
           branch="${{ github.ref }}"
@@ -135,7 +140,7 @@ jobs:
               exit 0
               ;;
           esac
-          
+
       - name: Deploy Changed Files to Specific VM
         if: success() && needs.list-files.outputs.changed_files != ''
         env:
@@ -171,6 +176,15 @@ jobs:
               gcloud compute ssh "$VM_USER@$VM_INSTANCE" --zone=$VM_ZONE --project=$GOOGLE_CLOUD_PROJECT -- "sudo cp -r '$DEPLOY_PATH/$file' '$BACKUP_PATH/${file}-bak-$backup_date'"
               echo "Backup of $file created successfully."
             fi
+            # Copy the changed file from Git path to VM
+            gcloud compute scp "$file" "$VM_USER@$VM_INSTANCE:$GIT_PATH/$file" --zone=$VM_ZONE --project=$GOOGLE_CLOUD_PROJECT
+            echo "Copied $file to VM at $GIT_PATH."
+            # Move file from Git path to deploy path
+            gcloud compute ssh "$VM_USER@$VM_INSTANCE" --zone=$VM_ZONE --project=$GOOGLE_CLOUD_PROJECT -- "sudo cp -r '$GIT_PATH/$file' '$DEPLOY_PATH/$file'"
+            echo "Moved $file to deploy path."
+            # Set permissions and ownership
+            gcloud compute ssh "$VM_USER@$VM_INSTANCE" --zone=$VM_ZONE --project=$GOOGLE_CLOUD_PROJECT -- "sudo chown -R www-data: '$DEPLOY_PATH/$file' && sudo chmod 640 '$DEPLOY_PATH/$file'"
+            echo "$file deployed successfully with updated permissions."
           done
       - name: Send notification to Google Chat - Deployment Success
         run: |
