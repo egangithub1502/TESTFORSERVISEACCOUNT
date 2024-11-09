@@ -2,10 +2,12 @@ name: List and Deploy PR Changed Files
 
 on:
   pull_request:
-    types: [closed]
+    types: 
+      -closed
     branches:
       - develop
       - master
+      
   issues:
     types: [opened, edited]
 
