@@ -3,11 +3,6 @@ name: List and Deploy PR Changed Files
 on:
   issues:
     types: [opened, edited]
-  pull_request:
-    types: [closed]
-    branches:
-      - develop
-      - master
 
 jobs:
   check-issue:
