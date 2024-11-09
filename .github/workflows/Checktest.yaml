@@ -13,6 +13,8 @@ jobs:
   check-issue:
     if: github.event_name == 'issues'
     runs-on: ubuntu-latest
+    outputs:
+      approved: ${{ steps.check_approval.outputs.approved }}  # Passing output from approval check
     steps:
       - name: Checkout code
         uses: actions/checkout@v2
@@ -32,14 +34,16 @@ jobs:
           if [[ "$labels" == *"APPROVED"* ]]; then
             echo "Issue approved."
             echo "approved=true" >> $GITHUB_ENV
+            echo "::set-output name=approved::true"  # Setting the output value as true
           else
             echo "Issue not approved. Exiting."
             echo "approved=false" >> $GITHUB_ENV
+            echo "::set-output name=approved::false"  # Setting the output value as false
             exit 1
           fi
 
   list-files:
-    if: env.approved == 'true'  # This step runs only if the issue is approved
+    if: needs.check-issue.outputs.approved == 'true'  # This step runs only if the issue is approved
     runs-on: ubuntu-latest
     outputs:
       changed_files: ${{ steps.check.outputs.changed_files }}
@@ -73,7 +77,7 @@ jobs:
           -d "$(jq -n --arg text "PR #${{ github.event.pull_request.number }}: Changed files detected: ${{ steps.check.outputs.changed_files }}" '{text: $text}')"
 
   deploy:
-    if: env.approved == 'true'  # This step runs only if the issue is approved
+    if: needs.check-issue.outputs.approved == 'true'  # This step runs only if the issue is approved
     runs-on: ubuntu-latest
     needs: list-files
     steps:
@@ -164,11 +168,10 @@ jobs:
             if gcloud compute ssh "$VM_USER@$VM_INSTANCE" --zone=$VM_ZONE --project=$GOOGLE_CLOUD_PROJECT -- "sudo test -f '$DEPLOY_PATH/$file'"; then
               echo "$file exists, creating backup."
               backup_date=$(gcloud compute ssh "$VM_USER@$VM_INSTANCE" --zone=$VM_ZONE --project=$GOOGLE_CLOUD_PROJECT -- "sudo date +'%Y%m%d_%H%M%S'")
-              gcloud compute ssh "$VM_USER@$VM_INSTANCE" --zone=$VM_ZONE --project=$GOOGLE_CLOUD_PROJECT -- "sudo cp -r '$DEPLOY_PATH/$file' '$BACKUP_PATH/${file}-bak-$backup_date'"
-              echo "Backup of $file created successfully."
+              gcloud compute ssh "$VM_USER@$VM_INSTANCE" --zone=$VM_ZONE --project=$GOOGLE_CLOUD_PROJECT -- "sudo cp '$DEPLOY_PATH/$file' '$BACKUP_PATH/$file.$backup_date'"
             fi
-            # Copy the changed file from Git path to VM
-            gcloud compute scp "$file" "$VM_USER@$VM_INSTANCE:$GIT_PATH/$file" --zone=$VM_ZONE --project=$GOOGLE_CLOUD_PROJECT
+            # Copy the file to the deployment path
+            gcloud compute scp --recurse "$file" "$VM_USER@$VM_INSTANCE:$DEPLOY_PATH/$file" --zone=$VM_ZONE --project=$GOOGLE_CLOUD_PROJECT
             echo "Deployed file $file to the VM."
           done
 
