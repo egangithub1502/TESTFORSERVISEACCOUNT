@@ -25,7 +25,7 @@ jobs:
             echo "Issue not approved. Exiting."
             echo "approved=false" >> $GITHUB_ENV
             exit 1
-
+          fi
   list-files:
     if: github.event_name == 'pull_request' && github.event.pull_request.merged == true && needs.check-issue.outputs.approved == 'true'
     needs: check-issue
