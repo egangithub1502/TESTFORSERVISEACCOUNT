@@ -25,21 +25,24 @@ jobs:
           # Fetch the labels of the issue using GitHub CLI
           labels=$(gh issue view "$issue_number" --json labels --jq '.labels[].name' || echo "Error fetching labels")
           
+          # Debugging output: Show fetched labels
+          echo "Labels: $labels"
+          
           # Check if the "APPROVED" label is present
           if [[ "$labels" == *"APPROVED"* ]]; then
             echo "Issue approved."
-            echo "approved=true" >> $GITHUB_ENV
             echo "::set-output name=approved::true"  # Setting the output value as true
+            echo "approved=true" >> $GITHUB_ENV  # Setting the environment variable for subsequent jobs
           else
             echo "Issue not approved. Exiting."
-            echo "approved=false" >> $GITHUB_ENV
             echo "::set-output name=approved::false"  # Setting the output value as false
+            echo "approved=false" >> $GITHUB_ENV  # Setting the environment variable for subsequent jobs
             exit 1
           fi
           
   list-files:
     needs: check-issue
-    if: ${{ needs.check-issue.outputs.approved == 'true' && github.head_ref == 'develop' || github.head_ref == 'master' }}
+    if: ${{ needs.check-issue.outputs.approved == 'true' && (github.head_ref == 'develop' || github.head_ref == 'master') }}
     runs-on: ubuntu-latest
     outputs:
       changed_files: ${{ steps.check.outputs.changed_files }}
@@ -51,6 +54,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y gh
+
       - name: Get PR number and check changed files
         id: check
         env:
@@ -63,6 +67,7 @@ jobs:
           changed_files_single_line=$(echo "$changed_files" | tr '\n' ' ')
           echo "changed_files=$changed_files_single_line" >> $GITHUB_ENV
           echo "::set-output name=changed_files::$changed_files_single_line"
+          
       - name: Send notification to Google Chat - Files Found
         if: success() && steps.check.outputs.changed_files != ''
         run: |
@@ -72,7 +77,7 @@ jobs:
           
   deploy:
     needs: [check-issue, list-files]
-    if: ${{ needs.check-issue.outputs.approved == 'true' && github.head_ref == 'develop' || github.head_ref == 'master' }}
+    if: ${{ needs.check-issue.outputs.approved == 'true' && (github.head_ref == 'develop' || github.head_ref == 'master') }}
     runs-on: ubuntu-latest
 
     steps:
@@ -85,6 +90,7 @@ jobs:
           changed_files="${{ needs.list-files.outputs.changed_files }}"
           echo "Changed files: $changed_files"
           echo "$changed_files" > changed_files.txt
+
       - name: Check if changed files are present
         run: |
           if [ -s changed_files.txt ]; then
@@ -93,11 +99,13 @@ jobs:
             echo "No changed files found, skipping deployment."
             exit 0
           fi
+
       - name: Send notification to Google Chat - Deployment Starting
         run: |
           curl -X POST "${{ secrets.GOOGLE_CHAT_WEBHOOK_URL }}" \
           -H 'Content-Type: application/json' \
           -d "$(jq -n --arg text "Deployment starting for PR #${{ github.event.pull_request.number }}. Changed files: ${{ needs.list-files.outputs.changed_files }}" '{text: $text}')"
+          
       - name: Set environment variables based on branch
         run: |
           branch="${{ github.ref }}"
@@ -127,6 +135,7 @@ jobs:
               exit 0
               ;;
           esac
+          
       - name: Deploy Changed Files to Specific VM
         if: success() && needs.list-files.outputs.changed_files != ''
         env:
