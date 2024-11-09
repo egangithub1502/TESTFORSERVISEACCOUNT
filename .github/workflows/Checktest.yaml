@@ -32,12 +32,11 @@ jobs:
           if [[ "$labels" == *"APPROVED"* ]]; then
             echo "Issue approved."
             echo "approved=true" >> $GITHUB_ENV  # Set environment variable for subsequent jobs
-            echo "::set-output name=approved::true"  # Setting the output value as true
-
+            echo "approved=true" >> $GITHUB_OUTPUT  # Set output value to true
           else
             echo "Issue not approved. Exiting."
             echo "approved=false" >> $GITHUB_ENV  # Set environment variable for subsequent jobs
-            echo "::set-output name=approved::false"  # Setting the output value as false
+            echo "approved=false" >> $GITHUB_OUTPUT  # Set output value to false
             exit 1
           fi
 
@@ -172,15 +171,6 @@ jobs:
               gcloud compute ssh "$VM_USER@$VM_INSTANCE" --zone=$VM_ZONE --project=$GOOGLE_CLOUD_PROJECT -- "sudo cp -r '$DEPLOY_PATH/$file' '$BACKUP_PATH/${file}-bak-$backup_date'"
               echo "Backup of $file created successfully."
             fi
-            # Copy the changed file from Git path to VM
-            gcloud compute scp "$file" "$VM_USER@$VM_INSTANCE:$GIT_PATH/$file" --zone=$VM_ZONE --project=$GOOGLE_CLOUD_PROJECT
-            echo "Copied $file to VM at $GIT_PATH."
-            # Move file from Git path to deploy path
-            gcloud compute ssh "$VM_USER@$VM_INSTANCE" --zone=$VM_ZONE --project=$GOOGLE_CLOUD_PROJECT -- "sudo cp -r '$GIT_PATH/$file' '$DEPLOY_PATH/$file'"
-            echo "Moved $file to deploy path."
-            # Set permissions and ownership
-            gcloud compute ssh "$VM_USER@$VM_INSTANCE" --zone=$VM_ZONE --project=$GOOGLE_CLOUD_PROJECT -- "sudo chown -R www-data: '$DEPLOY_PATH/$file' && sudo chmod 640 '$DEPLOY_PATH/$file'"
-            echo "$file deployed successfully with updated permissions."
           done
       - name: Send notification to Google Chat - Deployment Success
         run: |
