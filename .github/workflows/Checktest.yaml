@@ -14,7 +14,7 @@ jobs:
     if: github.event_name == 'issues'
     runs-on: ubuntu-latest
     outputs:
-      approved: ${{ steps.check_approval.outputs.approved }}  # Pass output from approval check
+      approved: ${{ steps.check_approval.outputs.approved }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v2
@@ -25,13 +25,8 @@ jobs:
           GH_TOKEN: ${{ secrets.JEGANMERGE }}
         run: |
           issue_number="${{ github.event.issue.number }}"
-          
-          # Fetch labels of the issue using GitHub CLI
           labels=$(gh issue view "$issue_number" --json labels --jq '.labels[].name' || echo "Error fetching labels")
-          
-          echo "Labels: $labels"  # Debugging output
-          
-          # Check if the "APPROVED" label is present
+          echo "Labels: $labels"
           if [[ "$labels" == *"APPROVED"* ]]; then
             echo "Issue approved."
             echo "approved=true" >> $GITHUB_ENV
@@ -41,7 +36,6 @@ jobs:
             echo "approved=false" >> $GITHUB_ENV
             echo "approved=false" >> $GITHUB_OUTPUT
             exit 1
-          fi
 
   list-files:
     needs: check-issue
@@ -49,7 +43,6 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       changed_files: ${{ steps.check.outputs.changed_files }}
-
     steps:
       - name: Checkout code
         uses: actions/checkout@v2
@@ -63,24 +56,24 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.JEGANMERGE }}
         run: |
-          pr_number=${{ github.event.pull_request.number }}
+          pr_number=$(gh pr list --json number --jq '.[0].number')
           echo "PR Number: $pr_number"
           changed_files=$(gh pr view "$pr_number" --json files --jq '.files[].path')
           echo "Changed files from gh command: $changed_files"
           changed_files_single_line=$(echo "$changed_files" | tr '\n' ' ')
           echo "changed_files=$changed_files_single_line" >> $GITHUB_ENV
           echo "::set-output name=changed_files::$changed_files_single_line"
-          
+
       - name: Send notification to Google Chat - Files Found
         if: success() && steps.check.outputs.changed_files != ''
         run: |
           curl -X POST "${{ secrets.GOOGLE_CHAT_WEBHOOK_URL }}" \
           -H 'Content-Type: application/json' \
-          -d "$(jq -n --arg text "PR #${{ github.event.pull_request.number }}: Changed files detected: ${{ steps.check.outputs.changed_files }}" '{text: $text}')"
+          -d "$(jq -n --arg text "PR #$pr_number: Changed files detected: ${{ steps.check.outputs.changed_files }}" '{text: $text}')"
+
   deploy:
     runs-on: ubuntu-latest
     needs: list-files
-
     steps:
       - name: Checkout code
         uses: actions/checkout@v2
@@ -91,7 +84,7 @@ jobs:
           changed_files="${{ needs.list-files.outputs.changed_files }}"
           echo "Changed files: $changed_files"
           echo "$changed_files" > changed_files.txt
-          
+
       - name: Check if changed files are present
         run: |
           if [ -s changed_files.txt ]; then
@@ -99,13 +92,13 @@ jobs:
           else
             echo "No changed files found, skipping deployment."
             exit 0
-          fi
-          
+
       - name: Send notification to Google Chat - Deployment Starting
         run: |
           curl -X POST "${{ secrets.GOOGLE_CHAT_WEBHOOK_URL }}" \
           -H 'Content-Type: application/json' \
-          -d "$(jq -n --arg text "Deployment starting for PR #${{ github.event.pull_request.number }}. Changed files: ${{ needs.list-files.outputs.changed_files }}" '{text: $text}')"
+          -d "$(jq -n --arg text "Deployment starting for PR #$pr_number. Changed files: ${{ needs.list-files.outputs.changed_files }}" '{text: $text}')"
+
       - name: Set environment variables based on branch
         run: |
           branch="${{ github.ref }}"
@@ -133,9 +126,8 @@ jobs:
             *)
               echo "No deployment for this branch"
               exit 0
-              ;;
           esac
-          
+
       - name: Deploy Changed Files to Specific VM
         if: success() && needs.list-files.outputs.changed_files != ''
         env:
@@ -180,8 +172,9 @@ jobs:
             gcloud compute ssh "$VM_USER@$VM_INSTANCE" --zone=$VM_ZONE --project=$GOOGLE_CLOUD_PROJECT -- "sudo chown -R www-data: '$DEPLOY_PATH/$file' && sudo chmod 640 '$DEPLOY_PATH/$file'"
             echo "$file deployed successfully with updated permissions."
           done
+
       - name: Send notification to Google Chat - Deployment Success
         run: |
           curl -X POST "${{ secrets.GOOGLE_CHAT_WEBHOOK_URL }}" \
           -H 'Content-Type: application/json' \
-          -d "$(jq -n --arg text "Deployment successful for PR #${{ github.event.pull_request.number }}. Files: ${{ needs.list-files.outputs.changed_files }}" '{text: $text}')"
+          -d "$(jq -n --arg text "Deployment successful for PR #$pr_number. Files: ${{ needs.list-files.outputs.changed_files }}" '{text: $text}')"
