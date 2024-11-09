@@ -43,6 +43,8 @@ jobs:
           fi
 
   list-files:
+  needs: check-issue
+
     if: needs.check-issue.outputs.approved == 'true'  # This step runs only if the issue is approved
     runs-on: ubuntu-latest
     outputs:
@@ -77,6 +79,8 @@ jobs:
           -d "$(jq -n --arg text "PR #${{ github.event.pull_request.number }}: Changed files detected: ${{ steps.check.outputs.changed_files }}" '{text: $text}')"
 
   deploy:
+  needs: check-issue
+
     if: needs.check-issue.outputs.approved == 'true'  # This step runs only if the issue is approved
     runs-on: ubuntu-latest
     needs: list-files
