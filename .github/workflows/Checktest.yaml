@@ -1,17 +1,25 @@
 name: List and Deploy PR Changed Files
 
 on:
-  pull_request:
-    types: [closed]
-    branches:
-      - develop
-      - master
+  issues:
+    types: [opened, labeled]
+  workflow_dispatch:
 
 jobs:
+  check-issue:
+    if: github.event_name == 'issues' && github.event.label.name == 'approved'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Print Issue Approval
+        run: echo "Issue approved and action triggered."
+
   list-files:
+    if: github.event_name == 'workflow_dispatch' || (github.event_name == 'issues' && github.event.label.name == 'approved')
+    needs: check-issue
     runs-on: ubuntu-latest
     outputs:
       changed_files: ${{ steps.check.outputs.changed_files }}
+      target_branch: ${{ steps.check.outputs.target_branch }}
 
     steps:
       - name: Checkout code
@@ -21,56 +29,47 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y gh
-      - name: Get PR number and check changed files
+
+      - name: Get PR Base Branch and Changed Files
         id: check
         env:
           GH_TOKEN: ${{ secrets.JEGANMERGE }}
         run: |
-          pr_number=${{ github.event.pull_request.number }}
+          pr_number=${{ github.event.issue.number }}
           echo "PR Number: $pr_number"
+          # Get the base branch (e.g., master or develop)
+          target_branch=$(gh pr view "$pr_number" --json baseRefName --jq '.baseRefName')
+          echo "Base branch: $target_branch"
+          echo "target_branch=$target_branch" >> $GITHUB_ENV
+          echo "::set-output name=target_branch::$target_branch"
+          
+          # Get changed files in the PR
           changed_files=$(gh pr view "$pr_number" --json files --jq '.files[].path')
           echo "Changed files from gh command: $changed_files"
           changed_files_single_line=$(echo "$changed_files" | tr '\n' ' ')
           echo "changed_files=$changed_files_single_line" >> $GITHUB_ENV
           echo "::set-output name=changed_files::$changed_files_single_line"
+
       - name: Send notification to Google Chat - Files Found
         if: success() && steps.check.outputs.changed_files != ''
         run: |
           curl -X POST "${{ secrets.GOOGLE_CHAT_WEBHOOK_URL }}" \
           -H 'Content-Type: application/json' \
-          -d "$(jq -n --arg text "PR #${{ github.event.pull_request.number }}: Changed files detected: ${{ steps.check.outputs.changed_files }}" '{text: $text}')"
+          -d "$(jq -n --arg text "Issue #${{ github.event.issue.number }}: Changed files detected for branch ${{ steps.check.outputs.target_branch }}: ${{ steps.check.outputs.changed_files }}" '{text: $text}')"
+
   deploy:
+    if: github.event_name == 'issues' && github.event.label.name == 'approved'
     runs-on: ubuntu-latest
     needs: list-files
-
     steps:
       - name: Checkout code
         uses: actions/checkout@v2
 
-      - name: Get changed files from previous step
-        id: get_changed_files
+      - name: Set Environment Variables Based on Base Branch
         run: |
-          changed_files="${{ needs.list-files.outputs.changed_files }}"
-          echo "Changed files: $changed_files"
-          echo "$changed_files" > changed_files.txt
-      - name: Check if changed files are present
-        run: |
-          if [ -s changed_files.txt ]; then
-            echo "Changed files detected, proceeding with deployment."
-          else
-            echo "No changed files found, skipping deployment."
-            exit 0
-          fi
-      - name: Send notification to Google Chat - Deployment Starting
-        run: |
-          curl -X POST "${{ secrets.GOOGLE_CHAT_WEBHOOK_URL }}" \
-          -H 'Content-Type: application/json' \
-          -d "$(jq -n --arg text "Deployment starting for PR #${{ github.event.pull_request.number }}. Changed files: ${{ needs.list-files.outputs.changed_files }}" '{text: $text}')"
-      - name: Set environment variables based on branch
-        run: |
-          branch="${{ github.ref }}"
+          branch="${{ needs.list-files.outputs.target_branch }}"
           case "$branch" in
-            "refs/heads/develop")
+            "develop")
               echo "DEPLOY_PATH=/var/www/www_profitokrs_com_6_4_1" >> $GITHUB_ENV
               echo "BACKUP_PATH=/home/Jegan/profit-site-en-backup" >> $GITHUB_ENV
               echo "GIT_PATH=/home/Jegan/git-rsync-en" >> $GITHUB_ENV
@@ -80,7 +79,7 @@ jobs:
               echo "GOOGLE_CLOUD_KEY=${{ secrets.GOOGLE_CLOUD_KEY_DEV }}" >> $GITHUB_ENV
               echo "GOOGLE_CLOUD_PROJECT=${{ secrets.GOOGLE_CLOUD_PROJECT_DEV }}" >> $GITHUB_ENV
               ;;
-            "refs/heads/master")
+            "master")
               echo "DEPLOY_PATH=/var/www/master_server_path" >> $GITHUB_ENV
               echo "BACKUP_PATH=/home/Jegan/master_backup" >> $GITHUB_ENV
               echo "GIT_PATH=/home/Jegan/master_git_path" >> $GITHUB_ENV
@@ -95,6 +94,7 @@ jobs:
               exit 0
               ;;
           esac
+
       - name: Deploy Changed Files to Specific VM
         if: success() && needs.list-files.outputs.changed_files != ''
         env:
@@ -107,41 +107,4 @@ jobs:
           VM_INSTANCE: ${{ env.VM_INSTANCE }}
           VM_ZONE: ${{ env.VM_ZONE }}
         run: |
-          # Decode Google Cloud key
-          echo "$GOOGLE_CLOUD_KEY" | base64 --decode > service-account.json
-          gcloud auth activate-service-account --key-file=service-account.json
-          gcloud config set project $GOOGLE_CLOUD_PROJECT
-          changed_files="${{ needs.list-files.outputs.changed_files }}"
-          if [ -z "$changed_files" ]; then
-            echo "No files to deploy."
-            exit 0
-          fi
-          files=($changed_files)
-          for file in "${files[@]}"; do
-            echo "Processing file: $file"
-            dir_path=$(dirname "$file")
-            # Create directories in the deploy path, git path, and backup path
-            gcloud compute ssh "$VM_USER@$VM_INSTANCE" --zone=$VM_ZONE --project=$GOOGLE_CLOUD_PROJECT -- "sudo mkdir -p '$DEPLOY_PATH/$dir_path' '$GIT_PATH/$dir_path' '$BACKUP_PATH/$dir_path'"
-            gcloud compute ssh "$VM_USER@$VM_INSTANCE" --zone=$VM_ZONE --project=$GOOGLE_CLOUD_PROJECT -- "sudo chown -R www-data: '$DEPLOY_PATH/$dir_path' && sudo chown -R Jegan: '$GIT_PATH/$dir_path' && sudo chown -R Jegan: '$BACKUP_PATH/$dir_path'"
-            # Check if the file exists in the deploy path
-            if gcloud compute ssh "$VM_USER@$VM_INSTANCE" --zone=$VM_ZONE --project=$GOOGLE_CLOUD_PROJECT -- "sudo test -f '$DEPLOY_PATH/$file'"; then
-              echo "$file exists, creating backup."
-              backup_date=$(gcloud compute ssh "$VM_USER@$VM_INSTANCE" --zone=$VM_ZONE --project=$GOOGLE_CLOUD_PROJECT -- "sudo date +'%Y%m%d_%H%M%S'")
-              gcloud compute ssh "$VM_USER@$VM_INSTANCE" --zone=$VM_ZONE --project=$GOOGLE_CLOUD_PROJECT -- "sudo cp -r '$DEPLOY_PATH/$file' '$BACKUP_PATH/${file}-bak-$backup_date'"
-              echo "Backup of $file created successfully."
-            fi
-            # Copy the changed file from Git path to VM
-            gcloud compute scp "$file" "$VM_USER@$VM_INSTANCE:$GIT_PATH/$file" --zone=$VM_ZONE --project=$GOOGLE_CLOUD_PROJECT
-            echo "Copied $file to VM at $GIT_PATH."
-            # Move file from Git path to deploy path
-            gcloud compute ssh "$VM_USER@$VM_INSTANCE" --zone=$VM_ZONE --project=$GOOGLE_CLOUD_PROJECT -- "sudo cp -r '$GIT_PATH/$file' '$DEPLOY_PATH/$file'"
-            echo "Moved $file to deploy path."
-            # Set permissions and ownership
-            gcloud compute ssh "$VM_USER@$VM_INSTANCE" --zone=$VM_ZONE --project=$GOOGLE_CLOUD_PROJECT -- "sudo chown -R www-data: '$DEPLOY_PATH/$file' && sudo chmod 640 '$DEPLOY_PATH/$file'"
-            echo "$file deployed successfully with updated permissions."
-          done
-      - name: Send notification to Google Chat - Deployment Success
-        run: |
-          curl -X POST "${{ secrets.GOOGLE_CHAT_WEBHOOK_URL }}" \
-          -H 'Content-Type: application/json' \
-          -d "$(jq -n --arg text "Deployment successful for PR #${{ github.event.pull_request.number }}. Files: ${{ needs.list-files.outputs.changed_files }}" '{text: $text}')"
+          # Deployment logic here
