@@ -43,12 +43,9 @@ jobs:
           fi
 
   list-files:
-  needs: check-issue
-
+    needs: check-issue
     if: needs.check-issue.outputs.approved == 'true'  # This step runs only if the issue is approved
     runs-on: ubuntu-latest
-    outputs:
-      changed_files: ${{ steps.check.outputs.changed_files }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v2
@@ -79,8 +76,7 @@ jobs:
           -d "$(jq -n --arg text "PR #${{ github.event.pull_request.number }}: Changed files detected: ${{ steps.check.outputs.changed_files }}" '{text: $text}')"
 
   deploy:
-  needs: check-issue
-
+    needs: check-issue
     if: needs.check-issue.outputs.approved == 'true'  # This step runs only if the issue is approved
     runs-on: ubuntu-latest
     needs: list-files
@@ -176,12 +172,11 @@ jobs:
             fi
             # Copy the file to the deployment path
             gcloud compute scp --recurse "$file" "$VM_USER@$VM_INSTANCE:$DEPLOY_PATH/$file" --zone=$VM_ZONE --project=$GOOGLE_CLOUD_PROJECT
-            echo "Deployed file $file to the VM."
+            echo "$file has been deployed."
           done
 
-      - name: Notify on Deployment Completion
-        if: success()
+      - name: Send notification to Google Chat - Deployment Complete
         run: |
           curl -X POST "${{ secrets.GOOGLE_CHAT_WEBHOOK_URL }}" \
           -H 'Content-Type: application/json' \
-          -d "$(jq -n --arg text "Deployment completed for PR #${{ github.event.pull_request.number }}." '{text: $text}')"
+          -d "$(jq -n --arg text "Deployment completed for PR #${{ github.event.pull_request.number }}" '{text: $text}')"
