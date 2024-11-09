@@ -19,7 +19,6 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.JEGANMERGE }}
         run: |
-          # Get the issue number dynamically
           issue_number="${{ github.event.issue.number }}"
           
           # Fetch the labels of the issue using GitHub CLI
@@ -42,7 +41,7 @@ jobs:
           
   list-files:
     needs: check-issue
-    if: ${{ needs.check-issue.outputs.approved == 'true' && (github.head_ref == 'develop' || github.head_ref == 'master') }}
+    if: ${{ needs.check-issue.outputs.approved == 'true' }}  # Only run if issue is approved
     runs-on: ubuntu-latest
     outputs:
       changed_files: ${{ steps.check.outputs.changed_files }}
@@ -88,7 +87,7 @@ jobs:
         run: |
           echo "Approved: ${{ needs.check-issue.outputs.approved }}"
           echo "Changed files: ${{ needs.list-files.outputs.changed_files }}"
-
+          
       - name: Get changed files from previous step
         id: get_changed_files
         run: |
@@ -110,7 +109,7 @@ jobs:
           curl -X POST "${{ secrets.GOOGLE_CHAT_WEBHOOK_URL }}" \
           -H 'Content-Type: application/json' \
           -d "$(jq -n --arg text "Deployment starting for PR #${{ github.event.pull_request.number }}. Changed files: ${{ needs.list-files.outputs.changed_files }}" '{text: $text}')"
-
+          
       - name: Set environment variables based on branch
         run: |
           branch="${{ github.ref }}"
