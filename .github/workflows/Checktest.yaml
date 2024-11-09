@@ -5,10 +5,22 @@ on:
     types: [closed]
     branches:
       - develop
-      - master
+      - master  
+  issues:
+    types: [opened, labeled]
+  workflow_dispatch:
 
 jobs:
+  check-issue:
+    if: github.event_name == 'issues' && github.event.label.name == 'approved'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Print Issue Approval
+        run: echo "Issue approved and action triggered."
+
   list-files:
+    if: github.event_name == 'workflow_dispatch' || (github.event_name == 'issues' && github.event.label.name == 'approved')
+    needs: check-issue
     runs-on: ubuntu-latest
     outputs:
       changed_files: ${{ steps.check.outputs.changed_files }}
