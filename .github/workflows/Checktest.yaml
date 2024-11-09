@@ -36,7 +36,7 @@ jobs:
             echo "approved=false" >> $GITHUB_ENV
             echo "::set-output name=approved::false"
             exit 1
-
+          fi
   list-files:
     needs: check-issue
     if: ${{ needs.check-issue.outputs.approved == 'true' && github.head_ref == 'develop' || github.head_ref == 'master' }}
