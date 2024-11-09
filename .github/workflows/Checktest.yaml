@@ -9,12 +9,14 @@ on:
       - develop
       - master
 
-
 jobs:
   check-issue:
     if: github.event_name == 'issues'
     runs-on: ubuntu-latest
     steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+
       - name: Check if issue is approved
         id: check_approval
         env:
@@ -24,7 +26,7 @@ jobs:
           issue_number="${{ github.event.issue.number }}"
           
           # Fetch the labels of the issue using GitHub CLI
-          labels=$(gh issue view "$issue_number" --json labels --jq '.labels[].name')
+          labels=$(gh issue view "$issue_number" --json labels --jq '.labels[].name' || echo "Error fetching labels")
           
           # Check if the "APPROVED" label is present
           if [[ "$labels" == *"APPROVED"* ]]; then
@@ -71,7 +73,7 @@ jobs:
           curl -X POST "${{ secrets.GOOGLE_CHAT_WEBHOOK_URL }}" \
           -H 'Content-Type: application/json' \
           -d "$(jq -n --arg text "PR #${{ github.event.pull_request.number }}: Changed files detected: ${{ steps.check.outputs.changed_files }}" '{text: $text}')"
-          
+
   deploy:
     runs-on: ubuntu-latest
     needs: list-files
