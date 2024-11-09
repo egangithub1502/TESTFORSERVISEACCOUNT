@@ -1,6 +1,11 @@
 name: List and Deploy PR Changed Files
 
 on:
+  pull_request:
+    types: [closed]
+    branches:
+      - develop
+      - master
   issues:
     types: [opened, edited]
 
@@ -41,7 +46,7 @@ jobs:
           
   list-files:
     needs: check-issue
-    if: ${{ needs.check-issue.outputs.approved == 'true' && (github.head_ref == 'develop' || github.head_ref == 'master') }}
+    if: ${{ needs.check-issue.outputs.approved == 'true' }}  # Only run if issue is approved
     runs-on: ubuntu-latest
     outputs:
       changed_files: ${{ steps.check.outputs.changed_files }}
