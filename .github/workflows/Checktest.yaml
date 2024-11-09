@@ -43,12 +43,9 @@ jobs:
           fi
 
   list-files:
-  needs: check-issue
-
-    if: needs.check-issue.outputs.approved == 'true'  # This step runs only if the issue is approved
+    needs: check-issue
+    if: ${{ needs.check-issue.outputs.approved == 'true' }}  # This step runs only if the issue is approved
     runs-on: ubuntu-latest
-    outputs:
-      changed_files: ${{ steps.check.outputs.changed_files }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v2
@@ -79,11 +76,9 @@ jobs:
           -d "$(jq -n --arg text "PR #${{ github.event.pull_request.number }}: Changed files detected: ${{ steps.check.outputs.changed_files }}" '{text: $text}')"
 
   deploy:
-  needs: check-issue
-
-    if: needs.check-issue.outputs.approved == 'true'  # This step runs only if the issue is approved
+    needs: [check-issue, list-files]
+    if: ${{ needs.check-issue.outputs.approved == 'true' }}  # This step runs only if the issue is approved
     runs-on: ubuntu-latest
-    needs: list-files
     steps:
       - name: Checkout code
         uses: actions/checkout@v2
@@ -171,17 +166,19 @@ jobs:
             # Check if the file exists in the deploy path
             if gcloud compute ssh "$VM_USER@$VM_INSTANCE" --zone=$VM_ZONE --project=$GOOGLE_CLOUD_PROJECT -- "sudo test -f '$DEPLOY_PATH/$file'"; then
               echo "$file exists, creating backup."
-              backup_date=$(gcloud compute ssh "$VM_USER@$VM_INSTANCE" --zone=$VM_ZONE --project=$GOOGLE_CLOUD_PROJECT -- "sudo date +'%Y%m%d_%H%M%S'")
-              gcloud compute ssh "$VM_USER@$VM_INSTANCE" --zone=$VM_ZONE --project=$GOOGLE_CLOUD_PROJECT -- "sudo cp '$DEPLOY_PATH/$file' '$BACKUP_PATH/$file.$backup_date'"
+              backup_date=$(gcloud compute ssh "$VM_USER@$VM_INSTANCE" --zone=$VM_ZONE --project=$GOOGLE_CLOUD_PROJECT -- "date +%Y-%m-%d_%H-%M-%S")
+              backup_file="$BACKUP_PATH/$file.$backup_date"
+              gcloud compute ssh "$VM_USER@$VM_INSTANCE" --zone=$VM_ZONE --project=$GOOGLE_CLOUD_PROJECT -- "sudo mv '$DEPLOY_PATH/$file' '$backup_file'"
+              echo "Backup created: $backup_file"
             fi
-            # Copy the file to the deployment path
-            gcloud compute scp --recurse "$file" "$VM_USER@$VM_INSTANCE:$DEPLOY_PATH/$file" --zone=$VM_ZONE --project=$GOOGLE_CLOUD_PROJECT
-            echo "Deployed file $file to the VM."
+            # Now copy the changed file to the deploy path
+            echo "Copying $file to $DEPLOY_PATH"
+            rsync -avz --progress --exclude '.git*' --exclude 'node_modules/' $GIT_PATH/$file "$VM_USER@$VM_INSTANCE:$DEPLOY_PATH/$file"
+            gcloud compute ssh "$VM_USER@$VM_INSTANCE" --zone=$VM_ZONE --project=$GOOGLE_CLOUD_PROJECT -- "sudo chown www-data: '$DEPLOY_PATH/$file'"
           done
 
-      - name: Notify on Deployment Completion
-        if: success()
+      - name: Send notification to Google Chat - Deployment Complete
         run: |
           curl -X POST "${{ secrets.GOOGLE_CHAT_WEBHOOK_URL }}" \
           -H 'Content-Type: application/json' \
-          -d "$(jq -n --arg text "Deployment completed for PR #${{ github.event.pull_request.number }}." '{text: $text}')"
+          -d "$(jq -n --arg text "Deployment complete for PR #${{ github.event.pull_request.number }}" '{text: $text}')"
