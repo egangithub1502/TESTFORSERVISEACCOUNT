@@ -37,6 +37,7 @@ jobs:
             echo "approved=false" >> $GITHUB_OUTPUT
             exit 1
           fi
+
   list-files:
     needs: check-issue
     if: ${{ needs.check-issue.outputs.approved == 'true' }}
@@ -56,7 +57,7 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.JEGANMERGE }}
         run: |
-          pr_number=$(gh pr list --json number --jq '.[0].number')
+          pr_number=$(gh pr list --json number --jq '.[0].number' --base develop --base master)
           echo "PR Number: $pr_number"
           changed_files=$(gh pr view "$pr_number" --json files --jq '.files[].path')
           echo "Changed files from gh command: $changed_files"
