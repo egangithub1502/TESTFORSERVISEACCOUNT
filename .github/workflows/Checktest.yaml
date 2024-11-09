@@ -6,7 +6,42 @@ on:
     branches:
       - develop
       - master
+  issues:
+    types: [opened, edited]
 
+jobs:
+  check-issue:
+    if: github.event_name == 'issues'
+    runs-on: ubuntu-latest
+    outputs:
+      approved: ${{ steps.check_approval.outputs.approved }}  # Pass output from approval check
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+
+      - name: Check if issue is approved
+        id: check_approval
+        env:
+          GH_TOKEN: ${{ secrets.JEGANMERGE }}
+        run: |
+          issue_number="${{ github.event.issue.number }}"
+          
+          # Fetch labels of the issue using GitHub CLI
+          labels=$(gh issue view "$issue_number" --json labels --jq '.labels[].name' || echo "Error fetching labels")
+          
+          echo "Labels: $labels"  # Debugging output
+          
+          # Check if the "APPROVED" label is present
+          if [[ "$labels" == *"APPROVED"* ]]; then
+            echo "Issue approved."
+            echo "approved=true" >> $GITHUB_ENV
+            echo "approved=true" >> $GITHUB_OUTPUT
+          else
+            echo "Issue not approved. Exiting."
+            echo "approved=false" >> $GITHUB_ENV
+            echo "approved=false" >> $GITHUB_OUTPUT
+            exit 1
+          fi
 
   list-files:
     needs: check-issue
@@ -105,7 +140,7 @@ on:
         if: success() && needs.list-files.outputs.changed_files != ''
         env:
           GOOGLE_CLOUD_PROJECT: ${{ env.GOOGLE_CLOUD_PROJECT }}
-          GOOGLE_CLOUD_KEY: ${{ env.GOOGLE_CLOUD_KEY }}  # Base64-encoded service account key
+          GOOGLE_CLOUD_KEY: ${{ env.GOOGLE_CLOUD_KEY }}
           DEPLOY_PATH: ${{ env.DEPLOY_PATH }}
           BACKUP_PATH: ${{ env.BACKUP_PATH }}
           GIT_PATH: ${{ env.GIT_PATH }}
@@ -113,7 +148,6 @@ on:
           VM_INSTANCE: ${{ env.VM_INSTANCE }}
           VM_ZONE: ${{ env.VM_ZONE }}
         run: |
-          # Decode Google Cloud key
           echo "$GOOGLE_CLOUD_KEY" | base64 --decode > service-account.json
           gcloud auth activate-service-account --key-file=service-account.json
           gcloud config set project $GOOGLE_CLOUD_PROJECT
