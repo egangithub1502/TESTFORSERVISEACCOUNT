@@ -1,0 +1,28 @@
+name: Check Issue Approval
+
+on:
+  issue_comment:
+    types: [created]
+
+jobs:
+  check-issue:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+
+      - name: Check if issue is approved
+        id: issue_check
+        run: |
+          issue_number=${{ github.event.issue.number }}
+          approval_status=$(gh issue view $issue_number --json labels --jq '.labels[] | select(.name == "approved")')
+          if [ -n "$approval_status" ]; then
+            echo "Issue approved."
+            echo "approved=true" >> $GITHUB_ENV
+          else
+            echo "Issue not approved."
+            echo "approved=false" >> $GITHUB_ENV
+          fi
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
