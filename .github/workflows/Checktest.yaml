@@ -31,15 +31,16 @@ jobs:
           # Check if the "APPROVED" label is present
           if [[ "$labels" == *"APPROVED"* ]]; then
             echo "Issue approved."
+            echo "approved=true" >> $GITHUB_ENV  # Set environment variable for subsequent jobs
             echo "::set-output name=approved::true"  # Setting the output value as true
-            echo "approved=true" >> $GITHUB_ENV  # Setting the environment variable for subsequent jobs
+
           else
             echo "Issue not approved. Exiting."
+            echo "approved=false" >> $GITHUB_ENV  # Set environment variable for subsequent jobs
             echo "::set-output name=approved::false"  # Setting the output value as false
-            echo "approved=false" >> $GITHUB_ENV  # Setting the environment variable for subsequent jobs
             exit 1
           fi
-          
+
   list-files:
     needs: check-issue
     if: ${{ needs.check-issue.outputs.approved == 'true' && (github.head_ref == 'develop' || github.head_ref == 'master') }}
@@ -77,7 +78,7 @@ jobs:
           
   deploy:
     needs: [check-issue, list-files]
-    if: ${{ needs.check-issue.outputs.approved == 'true' && (github.head_ref == 'develop' || github.head_ref == 'master') }}
+    if: ${{ needs.check-issue.outputs.approved == 'true' && needs.list-files.outputs.changed_files != '' }}  # Only run if approved and files are detected
     runs-on: ubuntu-latest
 
     steps:
