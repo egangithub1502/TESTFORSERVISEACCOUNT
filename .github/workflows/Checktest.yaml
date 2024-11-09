@@ -66,7 +66,7 @@ jobs:
              echo "No pull requests found for develop or master branches"
           exit 1
           fi
-         changed_files=$(gh pr view "$pr_number" --json files --jq '.files[].path')
+          changed_files=$(gh pr view "$pr_number" --json files --jq '.files[].path')
           echo "Changed files from gh command: $changed_files"
           changed_files_single_line=$(echo "$changed_files" | tr '\n' ' ')
           echo "changed_files=$changed_files_single_line" >> $GITHUB_ENV
