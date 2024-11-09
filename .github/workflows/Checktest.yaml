@@ -17,6 +17,8 @@ jobs:
     steps:
       - name: Check if issue is approved
         id: check_approval
+        env:
+          GH_TOKEN: ${{ secrets.JEGANMERGE }}
         run: |
           # Get the issue number dynamically
           issue_number="${{ github.event.issue.number }}"
